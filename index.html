@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f2a3f" />
+    <meta
+      name="description"
+      content="Harborlog is a local-first marina maintenance log for vessels, service tasks, parts checklists, and dockside activity."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%93%3C/text%3E%3C/svg%3E"
+    />
+    <title>Harborlog — Marina maintenance log</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>Harborlog needs JavaScript enabled to run.</noscript>
+    <!--
+      src/entry.dev.tsx exports a render function. The bootstrap below is the
+      client entry point: Vite bundles it for production and calls the function
+      so Qwik renders the app into the document.
+    -->
+    <script type="module">
+      import entryDev from '/src/entry.dev.tsx';
+
+      entryDev({});
+    </script>
+  </body>
+</html>
