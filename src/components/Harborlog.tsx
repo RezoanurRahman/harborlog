@@ -7,87 +7,32 @@ import {
   type QRL,
 } from '@builder.io/qwik';
 
+import type {
+  Activity,
+  ActivityKind,
+  CreateTaskInput,
+  CreateVesselInput,
+  Dashboard,
+  Part,
+  Task,
+  TaskCategory,
+  TaskPriority,
+  TaskStatus,
+  UpdateTaskInput,
+  Vessel,
+  VesselStatus,
+} from '../shared/types';
+import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, VESSEL_STATUSES } from '../shared/types';
+
 /* ==========================================================================
- * Contract
+ * UI contract
  * --------------------------------------------------------------------------
- * These declarations mirror `src/shared/types.ts` (the Elysia backend owns the
- * runtime shapes). Keeping the mirror next to the component makes the exact
- * status / priority / category strings explicit at every call site.
+ * Data shapes come straight from `src/shared/types.ts`; the Elysia backend
+ * owns the runtime contract. Only presentational unions live in this file.
  * ========================================================================== */
 
 export type ViewKey = 'dashboard' | 'fleet' | 'queue' | 'activity';
 export type QueueFilter = 'all' | 'due-soon' | 'in-progress' | 'completed';
-
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type TaskCategory =
-  | 'engine'
-  | 'hull'
-  | 'electrical'
-  | 'plumbing'
-  | 'rigging'
-  | 'safety'
-  | 'general';
-export type VesselStatus = 'active' | 'maintenance' | 'inactive' | 'dry_dock';
-export type ActivityKind =
-  | 'task_created'
-  | 'task_updated'
-  | 'task_completed'
-  | 'task_deleted'
-  | 'vessel_added'
-  | 'inspection_scheduled';
-
-export interface Part {
-  id: string;
-  name: string;
-  quantity: number;
-  ready: boolean;
-}
-
-export interface Task {
-  id: string;
-  vesselId: string;
-  title: string;
-  category: TaskCategory;
-  priority: TaskPriority;
-  status: TaskStatus;
-  dueDate: string;
-  assignee: string;
-  estimateHours: number;
-  notes: string;
-  parts: Part[];
-  createdAt: string;
-  completedAt: string | null;
-}
-
-export interface Vessel {
-  id: string;
-  name: string;
-  model: string;
-  berth: string;
-  status: VesselStatus;
-  nextInspection: string;
-  lengthFt: number;
-}
-
-export interface ActivityEvent {
-  id: string;
-  type: ActivityKind;
-  message: string;
-  actor: string;
-  createdAt: string;
-  taskId: string | null;
-  vesselId: string | null;
-}
-
-export interface DashboardSummary {
-  activeTasks: number;
-  dueThisWeek: number;
-  overdue: number;
-  completionRate: number;
-  totalTasks: number;
-  completedTasks: number;
-}
 
 /* ==========================================================================
  * Constants
@@ -100,52 +45,42 @@ const API = {
   activity: '/api/activity',
 } as const;
 
-const STATUS_ORDER: TaskStatus[] = ['todo', 'in_progress', 'blocked', 'done'];
+const STATUS_ORDER = TASK_STATUSES;
 
-const STATUS_META: Record<string, { label: string; glyph: string; badge: string }> = {
-  todo: { label: 'To do', glyph: '○', badge: 'badge--status-todo' },
-  in_progress: { label: 'In progress', glyph: '◐', badge: 'badge--status-progress' },
-  blocked: { label: 'Blocked', glyph: '!', badge: 'badge--status-blocked' },
-  done: { label: 'Completed', glyph: '✓', badge: 'badge--status-done' },
+const STATUS_META: Record<TaskStatus, { label: string; glyph: string; badge: string }> = {
+  scheduled: { label: 'Scheduled', glyph: '○', badge: 'badge--status-todo' },
+  'in-progress': { label: 'In progress', glyph: '◐', badge: 'badge--status-progress' },
+  complete: { label: 'Completed', glyph: '✓', badge: 'badge--status-done' },
 };
 
-const PRIORITY_ORDER: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
+const PRIORITY_ORDER = TASK_PRIORITIES;
 
-const PRIORITY_META: Record<string, { label: string; badge: string }> = {
+const PRIORITY_META: Record<TaskPriority, { label: string; badge: string }> = {
   low: { label: 'Low', badge: 'badge--priority-low' },
   medium: { label: 'Medium', badge: 'badge--priority-medium' },
   high: { label: 'High', badge: 'badge--priority-high' },
-  urgent: { label: 'Urgent', badge: 'badge--priority-urgent' },
 };
 
-const CATEGORY_ORDER: TaskCategory[] = [
-  'engine',
-  'hull',
-  'electrical',
-  'plumbing',
-  'rigging',
-  'safety',
-  'general',
-];
+const CATEGORY_ORDER = TASK_CATEGORIES;
 
-const CATEGORY_LABEL: Record<string, string> = {
+const CATEGORY_LABEL: Record<TaskCategory, string> = {
   engine: 'Engine',
   hull: 'Hull',
-  electrical: 'Electrical',
-  plumbing: 'Plumbing',
-  rigging: 'Rigging',
   safety: 'Safety',
-  general: 'General',
+  electrical: 'Electrical',
+  rigging: 'Rigging',
 };
 
-const VESSEL_STATUS_ORDER: VesselStatus[] = ['active', 'maintenance', 'inactive', 'dry_dock'];
+const VESSEL_STATUS_ORDER = VESSEL_STATUSES;
 
-const VESSEL_STATUS_META: Record<string, { label: string; badge: string; dot: string }> = {
-  active: { label: 'In service', badge: 'badge--vessel-active', dot: 'var(--teal)' },
-  maintenance: { label: 'In maintenance', badge: 'badge--vessel-maintenance', dot: 'var(--amber)' },
-  inactive: { label: 'Laid up', badge: 'badge--vessel-inactive', dot: 'var(--muted)' },
-  dry_dock: { label: 'Dry dock', badge: 'badge--vessel-dry', dot: 'var(--violet)' },
+const VESSEL_STATUS_META: Record<VesselStatus, { label: string; badge: string }> = {
+  ready: { label: 'Ready', badge: 'badge--vessel-active' },
+  attention: { label: 'Needs attention', badge: 'badge--vessel-maintenance' },
+  hauled: { label: 'Hauled out', badge: 'badge--vessel-dry' },
 };
+
+/** Fallback actor for activity entries: the API does not record a user. */
+const ACTIVITY_ACTOR = 'Dock crew';
 
 const FILTERS: { key: QueueFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -155,7 +90,11 @@ const FILTERS: { key: QueueFilter; label: string }[] = [
 ];
 
 const NAV: { key: ViewKey; label: string; icon: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
+  {
+    key: 'dashboard',
+    label: 'Dashboard',
+    icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  },
   {
     key: 'fleet',
     label: 'Fleet',
@@ -167,108 +106,46 @@ const NAV: { key: ViewKey; label: string; icon: string }[] = [
 
 const DAY_MS = 86_400_000;
 
-/**
- * The shared contract in `src/shared/types.ts` is the source of truth for these
- * values. The alias maps below only translate equivalent spellings that a
- * payload may carry (`completed` / `done`, `in-progress` / `in_progress`) back
- * onto the canonical strings, so a slightly different writer can never make the
- * dashboard look empty.
- */
-const STATUS_ALIASES: Record<string, TaskStatus> = {
-  todo: 'todo',
-  open: 'todo',
-  pending: 'todo',
-  backlog: 'todo',
-  in_progress: 'in_progress',
-  'in-progress': 'in_progress',
-  inprogress: 'in_progress',
-  doing: 'in_progress',
-  started: 'in_progress',
-  blocked: 'blocked',
-  waiting: 'blocked',
-  on_hold: 'blocked',
-  'on-hold': 'blocked',
-  done: 'done',
-  complete: 'done',
-  completed: 'done',
-  closed: 'done',
-  resolved: 'done',
-};
+const ACTIVITY_KINDS: readonly ActivityKind[] = [
+  'vessel-created',
+  'vessel-updated',
+  'task-created',
+  'task-updated',
+  'task-completed',
+  'task-deleted',
+  'part-added',
+  'part-checked',
+  'part-unchecked',
+];
 
-const PRIORITY_ALIASES: Record<string, TaskPriority> = {
-  low: 'low',
-  minor: 'low',
-  normal: 'medium',
-  standard: 'medium',
-  medium: 'medium',
-  moderate: 'medium',
-  high: 'high',
-  major: 'high',
-  important: 'high',
-  urgent: 'urgent',
-  critical: 'urgent',
-  blocker: 'urgent',
-};
+function isOneOf<T extends string>(options: readonly T[], value: string): value is T {
+  return (options as readonly string[]).includes(value);
+}
 
-const CATEGORY_ALIASES: Record<string, TaskCategory> = {
-  engine: 'engine',
-  mechanical: 'engine',
-  propulsion: 'engine',
-  hull: 'hull',
-  deck: 'hull',
-  fiberglass: 'hull',
-  electrical: 'electrical',
-  electric: 'electrical',
-  electronics: 'electrical',
-  wiring: 'electrical',
-  plumbing: 'plumbing',
-  water: 'plumbing',
-  sanitation: 'plumbing',
-  rigging: 'rigging',
-  rig: 'rigging',
-  sails: 'rigging',
-  safety: 'safety',
-  liferaft: 'safety',
-  fire: 'safety',
-  general: 'general',
-  other: 'general',
-  admin: 'general',
-};
-
-const VESSEL_STATUS_ALIASES: Record<string, VesselStatus> = {
-  active: 'active',
-  in_service: 'active',
-  'in-service': 'active',
-  afloat: 'active',
-  maintenance: 'maintenance',
-  in_maintenance: 'maintenance',
-  'in-maintenance': 'maintenance',
-  service: 'maintenance',
-  inactive: 'inactive',
-  laid_up: 'inactive',
-  'laid-up': 'inactive',
-  out_of_service: 'inactive',
-  'out-of-service': 'inactive',
-  dry_dock: 'dry_dock',
-  'dry-dock': 'dry_dock',
-  drydock: 'dry_dock',
-  hauled_out: 'dry_dock',
-};
-
+/** Parse a wire value onto the canonical vocabulary; unknown input falls back. */
 function normalizeStatus(value: string): TaskStatus {
-  return STATUS_ALIASES[value.trim().toLowerCase()] ?? 'todo';
+  const key = value.trim().toLowerCase();
+  return isOneOf(TASK_STATUSES, key) ? key : 'scheduled';
 }
 
 function normalizePriority(value: string): TaskPriority {
-  return PRIORITY_ALIASES[value.trim().toLowerCase()] ?? 'medium';
+  const key = value.trim().toLowerCase();
+  return isOneOf(TASK_PRIORITIES, key) ? key : 'medium';
 }
 
 function normalizeCategory(value: string): TaskCategory {
-  return CATEGORY_ALIASES[value.trim().toLowerCase()] ?? 'general';
+  const key = value.trim().toLowerCase();
+  return isOneOf(TASK_CATEGORIES, key) ? key : 'engine';
 }
 
 function normalizeVesselStatus(value: string): VesselStatus {
-  return VESSEL_STATUS_ALIASES[value.trim().toLowerCase()] ?? 'active';
+  const key = value.trim().toLowerCase();
+  return isOneOf(VESSEL_STATUSES, key) ? key : 'ready';
+}
+
+function normalizeActivityKind(value: string): ActivityKind {
+  const key = value.trim().toLowerCase();
+  return isOneOf(ACTIVITY_KINDS, key) ? key : 'task-updated';
 }
 
 /* ==========================================================================
@@ -338,13 +215,17 @@ function relativeTime(value: string | null | undefined, now: Date): string {
   return formatDate(value);
 }
 
-type DueTone = 'overdue' | 'today' | 'soon' | 'later' | 'done';
+type DueTone = 'overdue' | 'today' | 'soon' | 'later' | 'closed';
 
-function dueInfo(value: string | null | undefined, status: TaskStatus, now: Date): { tone: DueTone; text: string } {
+function dueInfo(
+  value: string | null | undefined,
+  status: TaskStatus,
+  now: Date,
+): { tone: DueTone; text: string } {
   const date = parseDate(value);
   const days = daysUntil(value, now);
   if (!date || days === null) return { tone: 'later', text: 'No due date' };
-  if (status === 'done') return { tone: 'done', text: `Closed ${formatDate(value)}` };
+  if (status === 'complete') return { tone: 'closed', text: `Closed ${formatDate(value)}` };
   if (days < 0) {
     const late = Math.abs(days);
     return { tone: 'overdue', text: late === 1 ? 'Overdue by 1 day' : `Overdue by ${late} days` };
@@ -369,25 +250,19 @@ function dueClass(tone: DueTone): string {
 }
 
 function isDone(status: TaskStatus): boolean {
-  return status === 'done';
+  return status === 'complete';
 }
 
 function statusMeta(status: TaskStatus) {
-  return STATUS_META[status] ?? { label: String(status), glyph: '•', badge: 'badge--status-todo' };
+  return STATUS_META[status];
 }
 
 function priorityMeta(priority: TaskPriority) {
-  return PRIORITY_META[priority] ?? { label: String(priority), badge: 'badge--priority-low' };
+  return PRIORITY_META[priority];
 }
 
 function vesselStatusMeta(status: VesselStatus) {
-  return (
-    VESSEL_STATUS_META[status] ?? {
-      label: String(status),
-      badge: 'badge--vessel-inactive',
-      dot: 'var(--muted)',
-    }
-  );
+  return VESSEL_STATUS_META[status];
 }
 
 function categoryLabel(category: TaskCategory): string {
@@ -433,7 +308,7 @@ function readParts(value: unknown): Part[] {
       id: readString(record.id, `part-${index}`),
       name: readString(record.name, 'Unnamed part'),
       quantity: readNumber(record.quantity, 1),
-      ready: readBoolean(record.ready, false),
+      checked: readBoolean(record.checked, false),
     };
   });
 }
@@ -443,16 +318,16 @@ function adaptTask(entry: Record<string, unknown>, index: number): Task {
     id: readString(entry.id, `task-${index}`),
     vesselId: readString(entry.vesselId),
     title: readString(entry.title, 'Untitled task'),
-    category: normalizeCategory(readString(entry.category, 'general')),
-    priority: normalizePriority(readString(entry.priority, 'medium')),
-    status: normalizeStatus(readString(entry.status, 'todo')),
+    category: normalizeCategory(readString(entry.category)),
+    priority: normalizePriority(readString(entry.priority)),
+    status: normalizeStatus(readString(entry.status)),
     dueDate: readString(entry.dueDate),
     assignee: readString(entry.assignee, 'Unassigned'),
-    estimateHours: readNumber(entry.estimateHours),
+    estimatedHours: readNumber(entry.estimatedHours),
     notes: readString(entry.notes),
     parts: readParts(entry.parts),
     createdAt: readString(entry.createdAt),
-    completedAt: typeof entry.completedAt === 'string' ? entry.completedAt : null,
+    updatedAt: readString(entry.updatedAt),
   };
 }
 
@@ -462,35 +337,51 @@ function adaptVessel(entry: Record<string, unknown>, index: number): Vessel {
     name: readString(entry.name, 'Unnamed vessel'),
     model: readString(entry.model),
     berth: readString(entry.berth),
-    status: normalizeVesselStatus(readString(entry.status, 'active')),
+    owner: readString(entry.owner),
+    status: normalizeVesselStatus(readString(entry.status)),
+    lastServiced: readString(entry.lastServiced),
     nextInspection: readString(entry.nextInspection),
-    lengthFt: readNumber(entry.lengthFt),
+    accent: readString(entry.accent),
   };
 }
 
-function adaptActivity(entry: Record<string, unknown>, index: number): ActivityEvent {
-  return {
+function adaptActivity(entry: Record<string, unknown>, index: number): Activity {
+  const activity: Activity = {
     id: readString(entry.id, `activity-${index}`),
-    type: readString(entry.type, 'task_updated') as ActivityKind,
+    kind: normalizeActivityKind(readString(entry.kind)),
     message: readString(entry.message, 'Activity recorded'),
-    actor: readString(entry.actor, 'Dock crew'),
-    createdAt: readString(entry.createdAt),
-    taskId: typeof entry.taskId === 'string' ? entry.taskId : null,
-    vesselId: typeof entry.vesselId === 'string' ? entry.vesselId : null,
+    timestamp: readString(entry.timestamp),
   };
+  if (typeof entry.taskId === 'string') activity.taskId = entry.taskId;
+  if (typeof entry.vesselId === 'string') activity.vesselId = entry.vesselId;
+  return activity;
 }
 
-function adaptSummary(value: unknown): DashboardSummary | null {
+const DASHBOARD_KEYS = [
+  'totalVessels',
+  'activeTasks',
+  'dueThisWeek',
+  'overdue',
+  'completedThisMonth',
+  'completionRate',
+  'attentionVessels',
+  'upcoming',
+  'recentActivity',
+] as const;
+
+function adaptDashboard(value: unknown): Dashboard | null {
   const record = asRecord(value);
-  const source = asRecord(record.summary ?? record.stats ?? record);
-  if (Object.keys(source).length === 0) return null;
+  if (!DASHBOARD_KEYS.some((key) => key in record)) return null;
   return {
-    activeTasks: readNumber(source.activeTasks),
-    dueThisWeek: readNumber(source.dueThisWeek),
-    overdue: readNumber(source.overdue),
-    completionRate: readNumber(source.completionRate),
-    totalTasks: readNumber(source.totalTasks),
-    completedTasks: readNumber(source.completedTasks),
+    totalVessels: readNumber(record.totalVessels),
+    activeTasks: readNumber(record.activeTasks),
+    dueThisWeek: readNumber(record.dueThisWeek),
+    overdue: readNumber(record.overdue),
+    completedThisMonth: readNumber(record.completedThisMonth),
+    completionRate: readNumber(record.completionRate),
+    attentionVessels: readList(record.attentionVessels, 'attentionVessels').map(adaptVessel),
+    upcoming: readList(record.upcoming, 'upcoming').map(adaptTask),
+    recentActivity: readList(record.recentActivity, 'recentActivity').map(adaptActivity),
   };
 }
 
@@ -525,24 +416,6 @@ interface Toast {
   text: string;
 }
 
-interface CreateTaskInput {
-  vesselId: string;
-  title: string;
-  category: TaskCategory;
-  priority: TaskPriority;
-  dueDate: string;
-  assignee: string;
-  estimateHours: number;
-  notes: string;
-}
-
-interface CreateVesselInput {
-  name: string;
-  model: string;
-  berth: string;
-  status: VesselStatus;
-}
-
 function errorMessage(error: unknown, fallback = 'The request could not be completed.'): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
@@ -565,7 +438,7 @@ function matchesFilter(task: Task, filter: QueueFilter, now: Date): boolean {
     case 'completed':
       return isDone(task.status);
     case 'in-progress':
-      return task.status === 'in_progress';
+      return task.status === 'in-progress';
     case 'due-soon': {
       if (isDone(task.status)) return false;
       const days = daysUntil(task.dueDate, now);
@@ -592,21 +465,42 @@ function matchesQuery(task: Task, vesselName: string, query: string): boolean {
   return haystack.includes(needle);
 }
 
-/** CSS suffix used to tone an activity dot for a given event type. */
-function activityTone(type: ActivityKind): string {
-  switch (type) {
-    case 'task_created':
+/** CSS suffix used to tone an activity dot for a given event kind. */
+function activityTone(kind: ActivityKind): string {
+  switch (kind) {
+    case 'vessel-created':
+    case 'task-created':
+    case 'part-added':
       return 'created';
-    case 'task_updated':
+    case 'vessel-updated':
+    case 'task-updated':
       return 'updated';
-    case 'task_completed':
+    case 'task-completed':
+    case 'part-checked':
       return 'completed';
-    case 'task_deleted':
+    case 'task-deleted':
+    case 'part-unchecked':
       return 'deleted';
-    case 'inspection_scheduled':
-      return 'inspection';
     default:
       return 'created';
+  }
+}
+
+/** Stroke path for the small glyph that heads an activity entry. */
+function activityIcon(kind: ActivityKind): string {
+  switch (kind) {
+    case 'task-completed':
+    case 'part-checked':
+      return 'M20 6 9 17l-5-5';
+    case 'task-created':
+    case 'vessel-created':
+    case 'part-added':
+      return 'M12 5v14M5 12h14';
+    case 'task-deleted':
+    case 'part-unchecked':
+      return 'M6 6l12 12M18 6 6 18';
+    default:
+      return 'M4 12h4l3 7 4-14 3 7h4';
   }
 }
 
@@ -622,10 +516,10 @@ export const Harborlog = component$(() => {
   const refreshing = useSignal(false);
   const syncing = useSignal(false);
 
-  const summary = useSignal<DashboardSummary | null>(null);
+  const dashboard = useSignal<Dashboard | null>(null);
   const vessels = useSignal<Vessel[]>([]);
   const tasks = useSignal<Task[]>([]);
-  const events = useSignal<ActivityEvent[]>([]);
+  const events = useSignal<Activity[]>([]);
   const lastSync = useSignal('');
 
   const query = useSignal('');
@@ -684,15 +578,20 @@ export const Harborlog = component$(() => {
     }).length;
     const derivedOverdue = overdueCount.value;
     const derivedRate = list.length === 0 ? 0 : Math.round((completed / list.length) * 100);
-    const totals = summary.value;
-    const completionRate = totals && totals.totalTasks > 0 ? totals.completionRate : derivedRate;
+    const month = now.toISOString().slice(0, 7);
+    const derivedThisMonth = list.filter(
+      (task) => isDone(task.status) && task.updatedAt.slice(0, 7) === month,
+    ).length;
+    const totals = dashboard.value;
+    const completionRate = totals ? totals.completionRate : derivedRate;
     return {
-      active: totals && totals.activeTasks > 0 ? totals.activeTasks : derivedActive,
-      dueThisWeek: totals && totals.dueThisWeek > 0 ? totals.dueThisWeek : derivedDue,
-      overdue: totals && totals.overdue > 0 ? totals.overdue : derivedOverdue,
+      active: totals ? totals.activeTasks : derivedActive,
+      dueThisWeek: totals ? totals.dueThisWeek : derivedDue,
+      overdue: totals ? totals.overdue : derivedOverdue,
+      completedThisMonth: totals ? totals.completedThisMonth : derivedThisMonth,
       completionRate: Math.max(0, Math.min(100, Math.round(completionRate))),
       completed,
-      total: totals && totals.totalTasks > 0 ? totals.totalTasks : list.length,
+      total: list.length,
     };
   });
 
@@ -714,7 +613,8 @@ export const Harborlog = component$(() => {
     return {
       all: list.length,
       'due-soon': list.filter((task) => matchesFilter(task, 'due-soon', nowDate.value)).length,
-      'in-progress': list.filter((task) => matchesFilter(task, 'in-progress', nowDate.value)).length,
+      'in-progress': list.filter((task) => matchesFilter(task, 'in-progress', nowDate.value))
+        .length,
       completed: done,
     } as Record<QueueFilter, number>;
   });
@@ -735,7 +635,10 @@ export const Harborlog = component$(() => {
 
   const recentEvents = useComputed$(() =>
     [...events.value]
-      .sort((a, b) => (parseDate(b.createdAt)?.getTime() ?? 0) - (parseDate(a.createdAt)?.getTime() ?? 0))
+      .sort(
+        (a, b) =>
+          (parseDate(b.timestamp)?.getTime() ?? 0) - (parseDate(a.timestamp)?.getTime() ?? 0),
+      )
       .slice(0, 8),
   );
 
@@ -749,7 +652,7 @@ export const Harborlog = component$(() => {
         request<unknown>(API.tasks),
         request<unknown>(API.activity),
       ]);
-      summary.value = adaptSummary(dashboardPayload);
+      dashboard.value = adaptDashboard(dashboardPayload);
       vessels.value = readList(vesselsPayload, 'vessels').map(adaptVessel);
       tasks.value = readList(tasksPayload, 'tasks').map(adaptTask);
       events.value = readList(activityPayload, 'activity').map(adaptActivity);
@@ -797,7 +700,7 @@ export const Harborlog = component$(() => {
   });
 
   /* ------------------------------------------------------------ mutations */
-  const patchTask = $(async (id: string, patch: Partial<Task>, successTitle: string) => {
+  const patchTask = $(async (id: string, patch: UpdateTaskInput, successTitle: string) => {
     busyTaskId.value = id;
     busyAction.value = 'patch';
     try {
@@ -832,19 +735,19 @@ export const Harborlog = component$(() => {
     }
   });
 
-  const togglePart = $(async (taskId: string, partId: string, ready: boolean) => {
+  const togglePart = $(async (taskId: string, partId: string, checked: boolean) => {
     tasks.value = tasks.value.map((task) =>
       task.id === taskId
         ? {
             ...task,
-            parts: task.parts.map((part) => (part.id === partId ? { ...part, ready } : part)),
+            parts: task.parts.map((part) => (part.id === partId ? { ...part, checked } : part)),
           }
         : task,
     );
     try {
       await request<unknown>(
         `${API.tasks}/${encodeURIComponent(taskId)}/parts/${encodeURIComponent(partId)}`,
-        { method: 'PATCH', body: JSON.stringify({ ready }) },
+        { method: 'PATCH', body: JSON.stringify({ checked }) },
       );
       await refreshAll();
     } catch (error) {
@@ -871,11 +774,11 @@ export const Harborlog = component$(() => {
     const payload: CreateTaskInput = {
       vesselId: String(data.get('vesselId') ?? ''),
       title: String(data.get('title') ?? '').trim(),
-      category: String(data.get('category') ?? 'general') as TaskCategory,
+      category: String(data.get('category') ?? 'engine') as TaskCategory,
       priority: String(data.get('priority') ?? 'medium') as TaskPriority,
       dueDate: String(data.get('dueDate') ?? ''),
       assignee: String(data.get('assignee') ?? '').trim() || 'Unassigned',
-      estimateHours: Number(data.get('estimateHours') ?? 0) || 0,
+      estimatedHours: Number(data.get('estimatedHours') ?? 0) || 0,
       notes: String(data.get('notes') ?? '').trim(),
     };
 
@@ -917,12 +820,26 @@ export const Harborlog = component$(() => {
       name: String(data.get('name') ?? '').trim(),
       model: String(data.get('model') ?? '').trim(),
       berth: String(data.get('berth') ?? '').trim(),
-      status: String(data.get('status') ?? 'active') as VesselStatus,
+      owner: String(data.get('owner') ?? '').trim(),
     };
+    const nextInspection = String(data.get('nextInspection') ?? '').trim();
     if (!payload.name) {
       vesselError.value = 'A vessel needs a name.';
       return;
     }
+    if (!payload.model) {
+      vesselError.value = 'Add the vessel model for the maintenance log.';
+      return;
+    }
+    if (!payload.berth) {
+      vesselError.value = 'Assign a berth so the crew can find the vessel.';
+      return;
+    }
+    if (!payload.owner) {
+      vesselError.value = 'Add the owner on file.';
+      return;
+    }
+    if (nextInspection) payload.nextInspection = nextInspection;
     vesselError.value = '';
     vesselSubmitting.value = true;
     try {
@@ -1113,7 +1030,10 @@ export const Harborlog = component$(() => {
     actionLabel?: string;
     onAction?: QRL<() => void>;
   }) => (
-    <div class={`state${options.tone === 'error' ? ' state--error' : ''}`} role={options.tone === 'error' ? 'alert' : undefined}>
+    <div
+      class={`state${options.tone === 'error' ? ' state--error' : ''}`}
+      role={options.tone === 'error' ? 'alert' : undefined}
+    >
       <span class="state__icon" aria-hidden="true">
         {renderIcon(
           options.tone === 'error'
@@ -1164,15 +1084,21 @@ export const Harborlog = component$(() => {
                 {renderIcon('M4 18h16M6 18l-2-6 8-3 8 3-2 6M12 9V4M9 4h6', 14)}
                 {vesselName}
               </span>
-              <span class="task-row__sep" aria-hidden="true">·</span>
+              <span class="task-row__sep" aria-hidden="true">
+                ·
+              </span>
               <span class="tag">{categoryLabel(task.category)}</span>
-              <span class="task-row__sep" aria-hidden="true">·</span>
+              <span class="task-row__sep" aria-hidden="true">
+                ·
+              </span>
               <span class={dueClass(due.tone)} title={formatLongDate(task.dueDate)}>
                 {due.text}
               </span>
               {!compact ? (
                 <>
-                  <span class="task-row__sep" aria-hidden="true">·</span>
+                  <span class="task-row__sep" aria-hidden="true">
+                    ·
+                  </span>
                   <span class="tag">{task.assignee}</span>
                 </>
               ) : null}
@@ -1236,11 +1162,14 @@ export const Harborlog = component$(() => {
             </b>
           </span>
           <span>
+            Last serviced <b>{formatDate(vessel.lastServiced)}</b>
+          </span>
+          <span>
             Open tasks <b>{openTasks}</b>
           </span>
         </div>
         <div class="vessel-card__foot">
-          <span class="tag">{vessel.lengthFt ? `${vessel.lengthFt} ft` : 'Length n/a'}</span>
+          <span class="tag">Owner · {vessel.owner || 'Unassigned'}</span>
           <button
             class="btn btn--sm btn--ghost"
             type="button"
@@ -1280,30 +1209,21 @@ export const Harborlog = component$(() => {
     );
   };
 
-  const renderActivityList = (list: ActivityEvent[]) => (
+  const renderActivityList = (list: Activity[]) => (
     <ol class="activity">
       {list.map((event) => (
         <li class="activity__item" key={event.id}>
           <span class="activity__rail" aria-hidden="true">
-            <span class={`activity__dot activity__dot--${activityTone(event.type)}`}>
-              {renderIcon(
-                event.type === 'task_completed'
-                  ? 'M20 6 9 17l-5-5'
-                  : event.type === 'task_created'
-                    ? 'M12 5v14M5 12h14'
-                    : event.type === 'inspection_scheduled'
-                      ? 'M8 2v4M16 2v4M3 10h18M5 4h14v16H5z'
-                      : 'M4 12h4l3 7 4-14 3 7h4',
-                14,
-              )}
+            <span class={`activity__dot activity__dot--${activityTone(event.kind)}`}>
+              {renderIcon(activityIcon(event.kind), 14)}
             </span>
           </span>
           <div>
             <p class="activity__message">{event.message}</p>
             <p class="activity__meta">
-              <span>{event.actor}</span>
+              <span>{ACTIVITY_ACTOR}</span>
               <span aria-hidden="true">·</span>
-              <span>{relativeTime(event.createdAt, nowDate.value)}</span>
+              <span>{relativeTime(event.timestamp, nowDate.value)}</span>
               {event.vesselId && vesselNames.value[event.vesselId] ? (
                 <>
                   <span aria-hidden="true">·</span>
@@ -1367,31 +1287,33 @@ export const Harborlog = component$(() => {
         {loading ? (
           renderSkeletonRows(compact ? 4 : 7)
         ) : list.length === 0 ? (
-          tasks.value.length === 0
-            ? renderState({
-                tone: 'empty',
-                title: 'No work orders yet',
-                text: 'Log the first maintenance task and it will appear here for the whole crew.',
-              })
-            : renderState({
-                tone: 'empty',
-                title: 'Nothing matches this view',
-                text: 'Try another filter or clear the search to see the rest of the queue.',
-                actionLabel: 'Clear filters',
-                onAction: $(() => {
-                  query.value = '';
-                  filter.value = 'all';
-                }),
-              })
+          tasks.value.length === 0 ? (
+            renderState({
+              tone: 'empty',
+              title: 'No work orders yet',
+              text: 'Log the first maintenance task and it will appear here for the whole crew.',
+            })
+          ) : (
+            renderState({
+              tone: 'empty',
+              title: 'Nothing matches this view',
+              text: 'Try another filter or clear the search to see the rest of the queue.',
+              actionLabel: 'Clear filters',
+              onAction: $(() => {
+                query.value = '';
+                filter.value = 'all';
+              }),
+            })
+          )
         ) : (
-          <ul class="task-list">
-            {list.map((task) => renderTaskRow(task, compact))}
-          </ul>
+          <ul class="task-list">{list.map((task) => renderTaskRow(task, compact))}</ul>
         )}
         <div class="panel__foot">
           <p class="panel__hint">
             Showing {list.length} of {total} work orders
-            {filter.value !== 'all' ? ` · ${FILTERS.find((item) => item.key === filter.value)?.label}` : ''}
+            {filter.value !== 'all'
+              ? ` · ${FILTERS.find((item) => item.key === filter.value)?.label}`
+              : ''}
           </p>
         </div>
       </>
@@ -1454,7 +1376,8 @@ export const Harborlog = component$(() => {
         : view.value === 'queue'
           ? 'Work queue'
           : 'Activity';
-  const syncState = status.value === 'loading' ? 'loading' : status.value === 'error' ? 'error' : 'ok';
+  const syncState =
+    status.value === 'loading' ? 'loading' : status.value === 'error' ? 'error' : 'ok';
   const syncLabel =
     status.value === 'loading'
       ? 'Loading the API…'
@@ -1475,7 +1398,10 @@ export const Harborlog = component$(() => {
       <aside class="sidebar" aria-label="Harborlog">
         <div class="brand">
           <span class="brand__mark" aria-hidden="true">
-            {renderIcon('M12 3v6M5 9h14l-1.4 11.2a1 1 0 0 1-1 .8H7.4a1 1 0 0 1-1-.8L5 9ZM9 19v-6M15 19v-6', 22)}
+            {renderIcon(
+              'M12 3v6M5 9h14l-1.4 11.2a1 1 0 0 1-1 .8H7.4a1 1 0 0 1-1-.8L5 9ZM9 19v-6M15 19v-6',
+              22,
+            )}
           </span>
           <span class="brand__text">
             <strong>Harborlog</strong>
@@ -1495,7 +1421,11 @@ export const Harborlog = component$(() => {
                 key={item.key}
                 class="nav__item"
                 aria-current={view.value === item.key ? 'page' : undefined}
-                aria-describedby={item.key === 'dashboard' && overdueCount.value > 0 ? 'nav-overdue-note' : undefined}
+                aria-describedby={
+                  item.key === 'dashboard' && overdueCount.value > 0
+                    ? 'nav-overdue-note'
+                    : undefined
+                }
                 onClick$={() => {
                   view.value = item.key;
                 }}
@@ -1629,7 +1559,9 @@ export const Harborlog = component$(() => {
                     </p>
                     <p class="kpi__value">{kpis.value.overdue}</p>
                     <p class="kpi__hint">
-                      {kpis.value.overdue > 0 ? 'Past the due date — needs attention' : 'Everything is on schedule'}
+                      {kpis.value.overdue > 0
+                        ? 'Past the due date — needs attention'
+                        : 'Everything is on schedule'}
                     </p>
                   </article>
                   <article class="kpi kpi--rate">
@@ -1652,6 +1584,9 @@ export const Harborlog = component$(() => {
                     </div>
                     <p class="kpi__hint">
                       {kpis.value.completed} of {kpis.value.total} work orders closed
+                      {kpis.value.completedThisMonth > 0
+                        ? ` · ${kpis.value.completedThisMonth} this month`
+                        : ''}
                     </p>
                   </article>
                 </div>
@@ -1717,17 +1652,15 @@ export const Harborlog = component$(() => {
                     </button>
                   </div>
                 </header>
-                {status.value === 'loading' ? (
-                  renderSkeletonRows(3)
-                ) : recentEvents.value.length === 0 ? (
-                  renderState({
-                    tone: 'empty',
-                    title: 'No dockside activity yet',
-                    text: 'Creating, updating or completing a task will record an entry here.',
-                  })
-                ) : (
-                  renderActivityList(recentEvents.value)
-                )}
+                {status.value === 'loading'
+                  ? renderSkeletonRows(3)
+                  : recentEvents.value.length === 0
+                    ? renderState({
+                        tone: 'empty',
+                        title: 'No dockside activity yet',
+                        text: 'Creating, updating or completing a task will record an entry here.',
+                      })
+                    : renderActivityList(recentEvents.value)}
               </section>
             </section>
           ) : null}
@@ -1756,7 +1689,9 @@ export const Harborlog = component$(() => {
                   Add vessel
                 </button>
               </div>
-              <section class="panel" aria-label="Vessels">{renderFleetPanel(false)}</section>
+              <section class="panel" aria-label="Vessels">
+                {renderFleetPanel(false)}
+              </section>
             </section>
           ) : null}
 
@@ -1768,8 +1703,8 @@ export const Harborlog = component$(() => {
                     Work queue
                   </h2>
                   <p class="view__copy">
-                    Every maintenance task in one list — search it, filter it, and open a row for the
-                    full dock-side detail.
+                    Every maintenance task in one list — search it, filter it, and open a row for
+                    the full dock-side detail.
                   </p>
                 </div>
                 <button
@@ -1803,23 +1738,21 @@ export const Harborlog = component$(() => {
                 </div>
               </div>
               <section class="panel" aria-label="Activity log">
-                {status.value === 'loading' ? (
-                  renderSkeletonRows(5)
-                ) : events.value.length === 0 ? (
-                  renderState({
-                    tone: 'empty',
-                    title: 'Nothing logged yet',
-                    text: 'Activity appears here as soon as your crew creates or completes work.',
-                  })
-                ) : (
-                  renderActivityList(
-                    [...events.value].sort(
-                      (a, b) =>
-                        (parseDate(b.createdAt)?.getTime() ?? 0) -
-                        (parseDate(a.createdAt)?.getTime() ?? 0),
-                    ),
-                  )
-                )}
+                {status.value === 'loading'
+                  ? renderSkeletonRows(5)
+                  : events.value.length === 0
+                    ? renderState({
+                        tone: 'empty',
+                        title: 'Nothing logged yet',
+                        text: 'Activity appears here as soon as your crew creates or completes work.',
+                      })
+                    : renderActivityList(
+                        [...events.value].sort(
+                          (a, b) =>
+                            (parseDate(b.timestamp)?.getTime() ?? 0) -
+                            (parseDate(a.timestamp)?.getTime() ?? 0),
+                        ),
+                      )}
               </section>
             </section>
           ) : null}
@@ -1834,22 +1767,22 @@ export const Harborlog = component$(() => {
             if (event.target === element) closeDrawer();
           }}
         >
-          <aside
-            class="drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="task-drawer-title"
-          >
+          <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="task-drawer-title">
             <header class="drawer__head">
               <div>
                 <p class="drawer__eyebrow">
-                  {categoryLabel(activeTask.category)} · {vesselNames.value[activeTask.vesselId] ?? 'Unassigned vessel'}
+                  {categoryLabel(activeTask.category)} ·{' '}
+                  {vesselNames.value[activeTask.vesselId] ?? 'Unassigned vessel'}
                 </p>
                 <h2 class="drawer__title" id="task-drawer-title">
                   {activeTask.title}
                 </h2>
                 <p class="drawer__sub">
-                  <span class={dueClass(dueInfo(activeTask.dueDate, activeTask.status, nowDate.value).tone)}>
+                  <span
+                    class={dueClass(
+                      dueInfo(activeTask.dueDate, activeTask.status, nowDate.value).tone,
+                    )}
+                  >
                     {dueInfo(activeTask.dueDate, activeTask.status, nowDate.value).text}
                   </span>
                   <span aria-hidden="true">·</span>
@@ -1880,11 +1813,15 @@ export const Harborlog = component$(() => {
                 </div>
                 <div>
                   <dt>Estimate</dt>
-                  <dd>{formatHours(activeTask.estimateHours)}</dd>
+                  <dd>{formatHours(activeTask.estimatedHours)}</dd>
                 </div>
                 <div>
                   <dt>Logged</dt>
                   <dd>{formatStamp(activeTask.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Updated</dt>
+                  <dd>{formatStamp(activeTask.updatedAt)}</dd>
                 </div>
               </dl>
 
@@ -1926,7 +1863,11 @@ export const Harborlog = component$(() => {
                   onChange$={(_, element) => {
                     const next = element.value as TaskPriority;
                     if (next !== activeTask.priority) {
-                      patchTask(activeTask.id, { priority: next }, `Priority set to ${priorityMeta(next).label}`);
+                      patchTask(
+                        activeTask.id,
+                        { priority: next },
+                        `Priority set to ${priorityMeta(next).label}`,
+                      );
                     }
                   }}
                 >
@@ -1942,7 +1883,8 @@ export const Harborlog = component$(() => {
                 <div class="block__title">
                   <span id="parts-group-label">Parts checklist</span>
                   <span class="panel__count">
-                    {activeTask.parts.filter((part) => part.ready).length}/{activeTask.parts.length} ready
+                    {activeTask.parts.filter((part) => part.checked).length}/
+                    {activeTask.parts.length} checked
                   </span>
                 </div>
                 {activeTask.parts.length === 0 ? (
@@ -1952,24 +1894,24 @@ export const Harborlog = component$(() => {
                 ) : (
                   <ul class="parts" aria-labelledby="parts-group-label">
                     {activeTask.parts.map((part) => (
-                      <li class={`part${part.ready ? ' part--ready' : ''}`} key={part.id}>
+                      <li class={`part${part.checked ? ' part--ready' : ''}`} key={part.id}>
                         <button
                           class="part__toggle"
                           type="button"
-                          aria-pressed={part.ready ? 'true' : 'false'}
+                          aria-pressed={part.checked ? 'true' : 'false'}
                           aria-label={
-                            part.ready
-                              ? `Mark ${part.name} as not ready`
-                              : `Mark ${part.name} as ready at the dock`
+                            part.checked
+                              ? `Mark ${part.name} as not checked`
+                              : `Mark ${part.name} as checked`
                           }
-                          onClick$={() => togglePart(activeTask.id, part.id, !part.ready)}
+                          onClick$={() => togglePart(activeTask.id, part.id, !part.checked)}
                         >
                           {renderIcon('M20 6 9 17l-5-5', 14)}
                         </button>
                         <span class="part__body">
                           <span class="part__name">{part.name}</span>
                           <span class="part__meta">
-                            Qty {part.quantity} · {part.ready ? 'Ready at the dock' : 'Not ready'}
+                            Qty {part.quantity} · {part.checked ? 'Checked' : 'Not checked'}
                           </span>
                         </span>
                       </li>
@@ -2026,7 +1968,9 @@ export const Harborlog = component$(() => {
                     disabled={busyAction.value === 'notes'}
                     onClick$={() => saveNotes(activeTask.id, notesRef.value?.value ?? '')}
                   >
-                    {busyAction.value === 'notes' ? <span class="spinner" aria-hidden="true"></span> : null}
+                    {busyAction.value === 'notes' ? (
+                      <span class="spinner" aria-hidden="true"></span>
+                    ) : null}
                     Save notes
                   </button>
                 </div>
@@ -2036,7 +1980,9 @@ export const Harborlog = component$(() => {
             <footer class="drawer__foot">
               {confirmDelete.value ? (
                 <>
-                  <span class="panel__hint">Delete “{activeTask.title}”? This cannot be undone.</span>
+                  <span class="panel__hint">
+                    Delete “{activeTask.title}”? This cannot be undone.
+                  </span>
                   <div class="panel__actions">
                     <button
                       class="btn btn--ghost btn--sm"
@@ -2075,7 +2021,7 @@ export const Harborlog = component$(() => {
                         type="button"
                         disabled={busyTaskId.value === activeTask.id}
                         onClick$={() =>
-                          patchTask(activeTask.id, { status: 'done' }, 'Task marked complete')
+                          patchTask(activeTask.id, { status: 'complete' }, 'Task marked complete')
                         }
                       >
                         {renderIcon('M20 6 9 17l-5-5', 14)}
@@ -2200,7 +2146,7 @@ export const Harborlog = component$(() => {
                   <span class="field__label">Estimate (hours)</span>
                   <input
                     class="field__input"
-                    name="estimateHours"
+                    name="estimatedHours"
                     type="number"
                     min="0"
                     step="0.5"
@@ -2296,21 +2242,32 @@ export const Harborlog = component$(() => {
                     name="model"
                     type="text"
                     placeholder="Beneteau Oceanis 41"
+                    required
                   />
                 </label>
                 <label class="field">
                   <span class="field__label">Berth</span>
-                  <input class="field__input" name="berth" type="text" placeholder="B-14" />
+                  <input
+                    class="field__input"
+                    name="berth"
+                    type="text"
+                    placeholder="B-14"
+                    required
+                  />
                 </label>
-                <label class="field form-grid--full">
-                  <span class="field__label">Service status</span>
-                  <select class="field__input" name="status" value="active">
-                    {VESSEL_STATUS_ORDER.map((option) => (
-                      <option value={option} key={option}>
-                        {vesselStatusMeta(option).label}
-                      </option>
-                    ))}
-                  </select>
+                <label class="field">
+                  <span class="field__label">Owner</span>
+                  <input
+                    class="field__input"
+                    name="owner"
+                    type="text"
+                    placeholder="Dana Whitfield"
+                    required
+                  />
+                </label>
+                <label class="field">
+                  <span class="field__label">Next inspection</span>
+                  <input class="field__input" name="nextInspection" type="date" />
                 </label>
               </div>
             </div>
