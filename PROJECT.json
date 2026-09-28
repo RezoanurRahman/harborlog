@@ -1,0 +1,9 @@
+{
+  "name": "Harborlog",
+  "slug": "harborlog",
+  "summary": "Harborlog is a local-first marina maintenance log for keeping vessels, service tasks, parts, and dockside activity in one calm workspace. It combines a polished Qwik dashboard with a typed Elysia API and deterministic in-memory storage.",
+  "frontend": "Qwik 1 + Vite",
+  "backend": "Elysia 1 + Node adapter",
+  "storage": "in-memory",
+  "language": "typescript"
+}
